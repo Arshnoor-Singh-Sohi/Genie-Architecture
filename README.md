@@ -1,4 +1,5 @@
-mermaid```
+mermaid
+```
 ---
 config:
   layout: fixed
