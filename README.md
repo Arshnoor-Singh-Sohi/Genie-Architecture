@@ -1,9 +1,5 @@
 mermaid
 ```
----
-config:
-  layout: fixed
----
 flowchart TB
  subgraph Legend["📊 LEGEND: Main Flow → | Security ⛔ | Monitoring ⋯⋯"]
         L1["🔵 Phases | 🔴 Security | 🟢 Unity Catalog | 🟡 Compute | 🟣 MLOps | 🔻 Threats"]
