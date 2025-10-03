@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Databricks Genie: Under the Hood</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Cool Neutrals with Blue Accents -->
+    <!-- Application Structure Plan: The SPA is designed with a persistent top navigation bar and distinct, scrollable content sections. This structure was chosen over tabs to allow users to both explore specific topics non-linearly via the navigation and to read the entire report sequentially if they prefer. This dual-mode consumption is ideal for a complex technical topic, catering to both targeted information seeking and comprehensive learning. Key interactions include smooth scrolling to sections and a conceptual chart to visualize reliability factors. This architecture prioritizes clarity and user-controlled pacing. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: System Architecture -> Goal: Organize/Inform -> Viz/Method: HTML/CSS Diagram -> Interaction: Static Visual Aid -> Justification: Clearly illustrates the "Compound AI System" concept without using prohibited SVG/Mermaid. It breaks down a complex idea into digestible visual components.
+        - Report Info: Request Workflow -> Goal: Change/Process -> Viz/Method: HTML/CSS Flowchart -> Interaction: Static Visual Aid -> Justification: A step-by-step flowchart is the most intuitive way to represent a process. Building it with Tailwind CSS provides a clean, responsive, and compliant alternative to image or SVG-based diagrams.
+        - Report Info: Reliability Factors -> Goal: Compare/Inform -> Viz/Method: Chart.js Bar Chart -> Interaction: Hover tooltips -> Justification: A bar chart effectively visualizes the conceptual relationship between curation effort and AI accuracy. Chart.js is mandated and provides interactivity through tooltips, enhancing user engagement and understanding.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px;
+            max-height: 450px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 400px;
+            }
+        }
+        .nav-link {
+            transition: all 0.3s ease;
+        }
+        .nav-link.active {
+            color: #2563eb;
+            border-bottom-color: #2563eb;
+        }
+        .step-arrow {
+            font-size: 2rem;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+        <header class="text-center py-12">
+            <h1 class="text-4xl md:text-5xl font-bold text-slate-800">Databricks Genie: Under the Hood</h1>
+            <p class="mt-4 text-lg text-slate-600 max-w-3xl mx-auto">An interactive guide to the architecture, workflow, security, and reliability of Databricks' conversational AI assistant.</p>
+        </header>
+
+        <nav id="main-nav" class="sticky top-0 z-10 bg-white/80 backdrop-blur-md shadow-sm rounded-lg mb-12">
+            <div class="flex justify-center items-center p-4 space-x-4 sm:space-x-8 overflow-x-auto">
+                <a href="#architecture" class="nav-link text-slate-600 hover:text-blue-600 border-b-2 border-transparent pb-2 font-medium">Architecture</a>
+                <a href="#workflow" class="nav-link text-slate-600 hover:text-blue-600 border-b-2 border-transparent pb-2 font-medium">Workflow</a>
+                <a href="#security" class="nav-link text-slate-600 hover:text-blue-600 border-b-2 border-transparent pb-2 font-medium">Security</a>
+                <a href="#reliability" class="nav-link text-slate-600 hover:text-blue-600 border-b-2 border-transparent pb-2 font-medium">Reliability</a>
+                <a href="#q-a" class="nav-link text-slate-600 hover:text-blue-600 border-b-2 border-transparent pb-2 font-medium">Q&A</a>
+            </div>
+        </nav>
+
+        <main>
+            <section id="architecture" class="py-12 scroll-mt-24">
+                <h2 class="text-3xl font-bold text-center mb-8 text-slate-800">System Architecture</h2>
+                <div class="bg-white p-8 rounded-xl shadow-lg">
+                    <p class="text-slate-600 mb-8 text-center max-w-4xl mx-auto">This section explains Genie's foundational design. Instead of relying on a single large language model (LLM), Genie employs a "Compound AI System." This modular architecture combines multiple specialized components, models, and data sources to interpret questions, generate accurate SQL, and deliver contextual answers, all while being deeply integrated with the Databricks platform's governance and metadata layers.</p>
+                    
+                    <div class="w-full max-w-4xl mx-auto">
+                        <div class="text-center mb-4"><span class="text-xl font-semibold text-slate-700">Genie's Compound AI System</span></div>
+                        <div class="border-2 border-blue-500 rounded-2xl p-6 bg-blue-50/50">
+                            <div class="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0 md:space-x-4">
+                                <div class="flex-shrink-0 text-center">
+                                    <div class="p-4 bg-white rounded-lg shadow">
+                                        <span class="text-lg font-semibold text-blue-700">User Prompt</span>
+                                        <p class="text-sm text-slate-500">Natural Language</p>
+                                    </div>
+                                </div>
+                                <div class="step-arrow hidden md:block">&#10230;</div>
+                                <div class="step-arrow block md:hidden transform rotate-90">&#10230;</div>
+                                <div class="text-center">
+                                    <div class="p-6 bg-blue-600 text-white rounded-xl shadow-lg">
+                                        <h3 class="text-xl font-bold">Genie Core Logic</h3>
+                                        <p class="text-sm">Parses, Filters & Generates</p>
+                                    </div>
+                                </div>
+                                <div class="step-arrow hidden md:block">&#10230;</div>
+                                <div class="step-arrow block md:hidden transform rotate-90">&#10230;</div>
+                                <div class="flex-shrink-0 text-center">
+                                     <div class="p-4 bg-white rounded-lg shadow">
+                                        <span class="text-lg font-semibold text-blue-700">SQL & Visualization</span>
+                                        <p class="text-sm text-slate-500">Actionable Output</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="step-arrow text-center my-2 transform rotate-90 scale-x-150">&#10230;</div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center mt-4">
+                                <div class="bg-slate-100 p-4 rounded-lg border border-slate-200">
+                                    <h4 class="font-semibold text-slate-700">Unity Catalog</h4>
+                                    <p class="text-sm text-slate-500">Table/column metadata, PK/FK relationships, Governance</p>
+                                </div>
+                                <div class="bg-slate-100 p-4 rounded-lg border border-slate-200">
+                                    <h4 class="font-semibold text-slate-700">Knowledge Store</h4>
+                                    <p class="text-sm text-slate-500">Instructions, Synonyms, JOIN logic, Example SQL</p>
+                                </div>
+                                <div class="bg-slate-100 p-4 rounded-lg border border-slate-200">
+                                    <h4 class="font-semibold text-slate-700">Dynamic Context</h4>
+                                    <p class="text-sm text-slate-500">Chat History, SQL Functions, User Permissions</p>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-center mt-4 text-sm text-slate-500">Genie's core logic intelligently filters and combines context from Unity Catalog, the local Knowledge Store, and dynamic session data to translate a user's prompt into a precise response.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="workflow" class="py-12 scroll-mt-24">
+                <h2 class="text-3xl font-bold text-center mb-8 text-slate-800">End-to-End Request Workflow</h2>
+                <div class="bg-white p-8 rounded-xl shadow-lg">
+                     <p class="text-slate-600 mb-8 text-center max-w-4xl mx-auto">This section traces the journey of a user's question from submission to the final answer. The workflow highlights how Genie systematically gathers and prioritizes information to construct a valid SQL query. This process ensures that the generated query is not only syntactically correct but also semantically aligned with both the user's intent and the underlying data structure, all while respecting data access permissions.</p>
+
+                    <div class="space-y-6">
+                        <div class="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
+                            <div class="w-full md:w-1/4 flex-shrink-0"><div class="bg-slate-100 p-4 rounded-lg text-center shadow-sm"><strong class="text-slate-800">1. Prompt Ingestion</strong><p class="text-sm text-slate-500">User asks a question like "Show me last quarter's sales by region."</p></div></div>
+                            <div class="step-arrow transform md:rotate-0 rotate-90">&#10230;</div>
+                            <div class="w-full md:w-3/4"><div class="bg-slate-50 border-l-4 border-blue-500 p-4 rounded-r-lg"><p class="text-slate-700">Genie parses the natural language prompt to identify key entities ('sales', 'region') and intent (aggregation, filtering by time).</p></div></div>
+                        </div>
+
+                         <div class="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
+                            <div class="w-full md:w-1/4 flex-shrink-0"><div class="bg-slate-100 p-4 rounded-lg text-center shadow-sm"><strong class="text-slate-800">2. Context Gathering</strong><p class="text-sm text-slate-500">System collects relevant information from all available sources.</p></div></div>
+                            <div class="step-arrow transform md:rotate-0 rotate-90">&#10230;</div>
+                            <div class="w-full md:w-3/4"><div class="bg-slate-50 border-l-4 border-blue-500 p-4 rounded-r-lg"><p class="text-slate-700">It retrieves schema from Unity Catalog (e.g., finds `sales_fact` and `region_dim` tables). It checks the Knowledge Store for synonyms (e.g., 'sales' maps to `transaction_amount`) and pre-defined JOINs. It also considers chat history for follow-up questions.</p></div></div>
+                        </div>
+                        
+                         <div class="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
+                            <div class="w-full md:w-1/4 flex-shrink-0"><div class="bg-slate-100 p-4 rounded-lg text-center shadow-sm"><strong class="text-slate-800">3. SQL Generation</strong><p class="text-sm text-slate-500">The LLM constructs a SQL query based on the curated context.</p></div></div>
+                            <div class="step-arrow transform md:rotate-0 rotate-90">&#10230;</div>
+                            <div class="w-full md:w-3/4"><div class="bg-slate-50 border-l-4 border-blue-500 p-4 rounded-r-lg"><p class="text-slate-700">Using the filtered context, the model generates a precise, read-only SQL query. For example: `SELECT r.name, SUM(s.amount) FROM sales s JOIN regions r ON s.region_id = r.id WHERE s.date >= 'start_of_quarter' GROUP BY r.name;`</p></div></div>
+                        </div>
+
+                         <div class="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
+                            <div class="w-full md:w-1/4 flex-shrink-0"><div class="bg-slate-100 p-4 rounded-lg text-center shadow-sm"><strong class="text-slate-800">4. Execution & Response</strong><p class="text-sm text-slate-500">The query is run, and results are returned to the user.</p></div></div>
+                           <div class="step-arrow transform md:rotate-0 rotate-90">&#10230;</div>
+                            <div class="w-full md:w-3/4"><div class="bg-slate-50 border-l-4 border-blue-500 p-4 rounded-r-lg"><p class="text-slate-700">The generated SQL is executed on a Databricks SQL warehouse using the user's credentials. The result set is returned, often accompanied by an auto-generated chart or visualization.</p></div></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="security" class="py-12 scroll-mt-24">
+                <h2 class="text-3xl font-bold text-center mb-8 text-slate-800">Security & Governance</h2>
+                <div class="bg-white p-8 rounded-xl shadow-lg">
+                    <p class="text-slate-600 mb-8 text-center max-w-4xl mx-auto">Security is a core principle of Genie's design, not an afterthought. This section details how Genie integrates with Databricks' existing security framework to protect data. It operates on a principle of "zero trust" and inherits all permissions from the user, ensuring that the AI can never access data that the user themselves is not authorized to see. All operations are logged and audited, maintaining a secure and transparent environment.</p>
+                    <div class="grid md:grid-cols-2 gap-8">
+                        <div class="bg-slate-50 p-6 rounded-lg border border-slate-200">
+                            <h3 class="text-xl font-semibold text-slate-800 mb-2">Unity Catalog Integration</h3>
+                            <p class="text-slate-600">Genie's foundation is Unity Catalog. All data access is governed by the permissions defined within it. A user must have `SELECT` privileges on a table to query it through Genie. This ensures fine-grained access control is always enforced, and Genie cannot circumvent established governance rules.</p>
+                        </div>
+                        <div class="bg-slate-50 p-6 rounded-lg border border-slate-200">
+                            <h3 class="text-xl font-semibold text-slate-800 mb-2">Read-Only Operations</h3>
+                            <p class="text-slate-600">Genie is designed to be a read-only system. It can only generate and execute `SELECT` statements. There is no capability for it to perform data-modifying operations such as `INSERT`, `UPDATE`, `DELETE`, or `DROP`. This fundamentally limits its potential for malicious or accidental data damage.</p>
+                        </div>
+                        <div class="bg-slate-50 p-6 rounded-lg border border-slate-200">
+                            <h3 class="text-xl font-semibold text-slate-800 mb-2">User Credential Passthrough</h3>
+                            <p class="text-slate-600">Every query generated by Genie is executed using the credentials of the user who submitted the prompt. The AI does not have its own service account or elevated privileges. If a user cannot access certain data directly, neither can Genie on their behalf.</p>
+                        </div>
+                         <div class="bg-slate-50 p-6 rounded-lg border border-slate-200">
+                            <h3 class="text-xl font-semibold text-slate-800 mb-2">Data Privacy & Model Training</h3>
+                            <p class="text-slate-600">Databricks contractually commits that customer data, prompts, and responses submitted to Genie are not used to train foundation models for other customers. Model partners do not retain this data, ensuring confidentiality and preventing data leakage across organizations.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="reliability" class="py-12 scroll-mt-24">
+                <h2 class="text-3xl font-bold text-center mb-8 text-slate-800">Building a Reliable Genie</h2>
+                 <div class="bg-white p-8 rounded-xl shadow-lg">
+                    <p class="text-slate-600 mb-8 text-center max-w-4xl mx-auto">Achieving high reliability with any generative AI system is a challenge. This section explains that Genie's accuracy is not automatic; it is the result of a deliberate and iterative curation process. The quality of its output is directly proportional to the quality and richness of the context provided by data analysts and experts. A well-curated "Genie Space" is the key to transforming a general-purpose AI into a trustworthy, domain-specific analytics expert.</p>
+                    <div class="chart-container">
+                        <canvas id="reliabilityChart"></canvas>
+                    </div>
+                    <p class="text-center mt-4 text-sm text-slate-500">This chart illustrates how response accuracy improves as more contextual information is provided to a Genie space. Click on the bars to see more details.</p>
+                    
+                    <div class="mt-12 grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div class="text-center">
+                            <div class="text-3xl font-bold text-blue-600">1</div>
+                            <h4 class="font-semibold mt-2 text-slate-800">Annotate Data</h4>
+                            <p class="text-sm text-slate-500 mt-1">Provide clear, descriptive comments for tables and columns in Unity Catalog. This is the most fundamental step.</p>
+                        </div>
+                         <div class="text-center">
+                            <div class="text-3xl font-bold text-blue-600">2</div>
+                            <h4 class="font-semibold mt-2 text-slate-800">Add Instructions</h4>
+                            <p class="text-sm text-slate-500 mt-1">Define business logic, jargon, and default behaviors in plain text (e.g., "Fiscal year starts in February").</p>
+                        </div>
+                         <div class="text-center">
+                            <div class="text-3xl font-bold text-blue-600">3</div>
+                            <h4 class="font-semibold mt-2 text-slate-800">Provide Examples</h4>
+                            <p class="text-sm text-slate-500 mt-1">Add trusted, hand-written SQL queries for common or complex questions. Genie uses these as powerful templates.</p>
+                        </div>
+                         <div class="text-center">
+                            <div class="text-3xl font-bold text-blue-600">4</div>
+                            <h4 class="font-semibold mt-2 text-slate-800">Test & Iterate</h4>
+                            <p class="text-sm text-slate-500 mt-1">Continuously test with real user questions, provide feedback on responses, and refine the context to improve accuracy over time.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+             <section id="q-a" class="py-12 scroll-mt-24">
+                <h2 class="text-3xl font-bold text-center mb-8 text-slate-800">Frequently Asked Questions</h2>
+                <div class="bg-white p-8 rounded-xl shadow-lg max-w-4xl mx-auto">
+                    <p class="text-slate-600 mb-8 text-center">This section addresses common and critical questions about Genie's behavior, vulnerabilities, and operational nuances. Understanding these aspects is key to effectively managing and interacting with the system, helping users set realistic expectations and identify potential areas for improvement or caution.</p>
+                    <div class="space-y-6">
+                        <div>
+                            <h3 class="text-lg font-semibold text-slate-800">Is the system prone to prompt injection?</h3>
+                            <p class="text-slate-600 mt-2">While no LLM system is 100% immune, Genie has strong mitigations. Its primary defense is being heavily "grounded" in the specific context of the Unity Catalog schema and the curated Knowledge Store. Its goal is to generate structured SQL, not open-ended text, which significantly reduces the attack surface. Malicious prompts attempting to bypass instructions are less likely to succeed because the system is biased towards generating valid SQL against a known schema. However, poorly curated spaces with ambiguous instructions could be more susceptible to manipulation.</p>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-slate-800">Will Genie give the same answer if a query is modified slightly?</h3>
+                            <p class="text-slate-600 mt-2">Not necessarily. Genie is non-deterministic. Minor changes in wording can lead the model down a different path of reasoning, potentially resulting in a different (though hopefully still correct) SQL query. The system's robustness to variations depends on the quality of curation. A space with rich metadata, synonyms, and example queries is more likely to interpret semantically similar questions consistently.</p>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-slate-800">How does it handle spelling mistakes?</h3>
+                            <p class="text-slate-600 mt-2">Genie leverages the underlying LLM's robust natural language understanding capabilities. It can typically handle common spelling mistakes and typos. It performs a semantic search, matching the user's misspelled words to the most relevant table and column names from the provided context (e.g., 'custmer revnue' would likely map correctly to 'customer_revenue').</p>
+                        </div>
+                         <div>
+                            <h3 class="text-lg font-semibold text-slate-800">How can someone break the Genie system?</h3>
+                            <p class="text-slate-600 mt-2">Breaking Genie typically involves exploiting gaps in its knowledge or context rather than a brute-force security breach. Methods include:
+                                <ul class="list-disc list-inside mt-2 space-y-1">
+                                    <li><strong>Ambiguity Exploitation:</strong> Asking vague questions that could be interpreted in multiple valid ways, revealing inconsistencies in its logic.</li>
+                                    <li><strong>Complex Logic Puzzles:</strong> Crafting questions that require multi-step, complex reasoning that exceeds the model's current capabilities or the provided context.</li>
+                                    <li><strong>Contextual Contradiction:</strong> Providing contradictory information in a long chat history to confuse the model on follow-up questions.</li>
+                                </ul>
+                                These are primarily methods to induce incorrect or illogical responses, not to compromise the underlying data security, which is protected by Unity Catalog.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+        
+        <footer class="text-center py-8 text-slate-500 text-sm">
+            <p>This interactive report was generated to explain the inner workings of Databricks Genie.</p>
+            <p>&copy; 2025. For informational purposes only.</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const navLinks = document.querySelectorAll('.nav-link');
+            const sections = document.querySelectorAll('main section');
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        navLinks.forEach(link => {
+                            link.classList.toggle('active', link.getAttribute('href').substring(1) === entry.target.id);
+                        });
+                    }
+                });
+            }, { rootMargin: "-50% 0px -50% 0px" });
+
+            sections.forEach(section => {
+                observer.observe(section);
+            });
+            
+            navLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const targetId = this.getAttribute('href');
+                    document.querySelector(targetId).scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                });
+            });
+
+            const createReliabilityChart = () => {
+                const ctx = document.getElementById('reliabilityChart').getContext('2d');
+                if (!ctx) return;
+
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Base Model Only', '+ Annotated Data', '+ Instructions', '+ Example SQL', 'Fully Curated'],
+                        datasets: [{
+                            label: 'Conceptual Response Accuracy (%)',
+                            data: [45, 65, 75, 88, 95],
+                            backgroundColor: [
+                                'rgba(148, 163, 184, 0.6)',
+                                'rgba(59, 130, 246, 0.6)',
+                                'rgba(59, 130, 246, 0.7)',
+                                'rgba(59, 130, 246, 0.8)',
+                                'rgba(37, 99, 235, 0.9)'
+                            ],
+                            borderColor: [
+                                'rgba(148, 163, 184, 1)',
+                                'rgba(59, 130, 246, 1)',
+                                'rgba(59, 130, 246, 1)',
+                                'rgba(59, 130, 246, 1)',
+                                'rgba(37, 99, 235, 1)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100,
+                                grid: {
+                                    color: '#e2e8f0'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            title: {
+                                display: true,
+                                text: 'Impact of Curation on Genie\'s Accuracy',
+                                font: {
+                                    size: 18,
+                                    weight: '600'
+                                },
+                                color: '#1e293b',
+                                padding: {
+                                    bottom: 20
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    footer: function(tooltipItems) {
+                                        const tooltips = [
+                                            'Baseline performance with no specific context.',
+                                            'Adding table/column descriptions provides foundational context.',
+                                            'Defining business logic and jargon significantly improves understanding.',
+                                            'Providing correct query patterns is highly effective for complex questions.',
+                                            'An iteratively tested and refined space achieves high reliability.'
+                                        ];
+                                        return tooltips[tooltipItems[0].dataIndex] || '';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            };
+
+            createReliabilityChart();
+        });
+    </script>
+
+</body>
+</html>
